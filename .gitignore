@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+.pnpm-store/
 /.pnp
 .pnp.*
 .yarn/*
@@ -30,8 +31,15 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — never commit real secrets.
+# Ignore every .env* file (.env, .env.local, .env.production, ...),
+# and explicitly re-allow ONLY the placeholder template below.
 .env*
+!.env.example
+
+# AI assistant instructions — local only, do not publish
+CLAUDE.md
+AGENTS.md
 
 # vercel
 .vercel

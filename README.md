@@ -84,8 +84,8 @@ sequenceDiagram
 ### 1. 설치
 
 ```bash
-git clone <this-repo>
-cd summer-side-project
+git clone https://github.com/daewonLims/office-ai-toolbox.git
+cd office-ai-toolbox
 pnpm install
 ```
 
@@ -113,7 +113,7 @@ cp .env.example .env.local
 pnpm dev
 ```
 
-[http://localhost:3000](http://localhost:3000) 에서 확인할 수 있습니다.
+[http://localhost:3000](http://localhost:3000) 에서 확인할 수 있습니다. 바로 써볼 수 있는 테스트 파일이 `sample-data/`에 준비되어 있습니다.
 
 ## 🛡️ 보안 설계
 
@@ -147,6 +147,7 @@ lib/                         # 공유 코어 전용 (도구 전용 코드는 두
 components/                  # 공유 UI
 ├─ provider-select.tsx       # AI 프로바이더 선택
 └─ ui/                       # shadcn/ui 컴포넌트
+sample-data/                 # 데모용 가상 데이터 + 생성 스크립트
 ```
 
 새 도구는 `features/<이름>/` 폴더(자급자족 모듈) + `app/tools/<이름>/` 얇은 라우트 + `lib/tools.ts` 메타데이터 한 줄로 추가됩니다.
@@ -164,5 +165,3 @@ components/                  # 공유 UI
 ## 📄 라이선스
 
 MIT
-#   o f f i c e - a i - t o o l b o x  
- 
