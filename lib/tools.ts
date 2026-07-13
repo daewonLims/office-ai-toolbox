@@ -18,11 +18,11 @@ export const tools: Tool[] = [
     status: "active",
   },
   {
-    slug: "ppt-linter",
+    slug: "ppt-lint",
     name: "PPT 린터",
     description: "발표 자료의 오탈자·서식·일관성을 AI가 점검합니다",
-    href: "/tools/ppt-linter",
-    status: "coming-soon",
+    href: "/tools/ppt-lint",
+    status: "active",
   },
   {
     slug: "outline-converter",
