@@ -60,7 +60,7 @@ export const tools: Tool[] = [
     name: "인수인계서 생성",
     description: "업무 기록을 바탕으로 인수인계서 초안을 만듭니다",
     href: "/tools/handover-generator",
-    status: "coming-soon",
+    status: "active",
     aiDataScope: "full-text",
     icon: FileText,
   },
