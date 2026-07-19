@@ -15,6 +15,56 @@ export const MAX_TOTAL_LEN = 30_000;
 /** 개별 필드 상한(방어적). 전체 합계 검증과 별개로 단일 필드 폭주를 막는다. */
 export const FIELD_MAX_LEN = 10_000;
 
+// ---- 입력 상한 선택(사용자가 고르는 상한) ---------------------------------
+// 사용자가 드롭다운으로 고르는 "이번 입력의 상한". 절대 상한(MAX_TOTAL_LEN)을
+// 넘을 수 없다. 실효 상한은 항상 min(inputLimit, MAX_TOTAL_LEN)으로 계산한다.
+
+/** 선택 상한 단위(1,000자). */
+export const INPUT_LIMIT_STEP = 1_000;
+/** 선택 가능한 최소 상한. */
+export const INPUT_LIMIT_MIN = 1_000;
+/** 선택 가능한 최대 상한 = 절대 상한. */
+export const INPUT_LIMIT_MAX = MAX_TOTAL_LEN;
+/** 기본 입력 상한. */
+export const DEFAULT_INPUT_LIMIT = 5_000;
+/** 이 값 이상 선택 시 비용·잘림 안내문 노출. */
+export const INPUT_LIMIT_WARN_AT = 10_000;
+/** 드롭다운 선택지: 1,000 ~ 30,000 (1,000 단위, 30개). */
+export const INPUT_LIMIT_OPTIONS: number[] = Array.from(
+  { length: INPUT_LIMIT_MAX / INPUT_LIMIT_STEP },
+  (_, i) => (i + 1) * INPUT_LIMIT_STEP
+);
+
+/** 유효한 입력 상한인지: 1,000 단위 정수이며 [MIN, MAX] 범위. */
+export function isValidInputLimit(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= INPUT_LIMIT_MIN &&
+    value <= INPUT_LIMIT_MAX &&
+    value % INPUT_LIMIT_STEP === 0
+  );
+}
+
+/** 저장값 등 임의 입력을 유효한 상한으로 보정(범위 밖·비정상이면 기본값). */
+export function normalizeInputLimit(value: unknown): number {
+  const n = typeof value === "string" ? Number(value) : value;
+  return isValidInputLimit(n) ? n : DEFAULT_INPUT_LIMIT;
+}
+
+/** 선택된 상한의 실효 상한 = min(inputLimit, 절대 상한 30,000). */
+export function effectiveInputLimit(inputLimit: number): number {
+  return Math.min(inputLimit, MAX_TOTAL_LEN);
+}
+
+/** 합계 글자 수가 실효 상한 이내인지. 클라이언트 카운터/서버 검증 공용. */
+export function isWithinInputLimit(
+  v: Record<FieldKey, string>,
+  inputLimit: number
+): boolean {
+  return totalLength(v) <= effectiveInputLimit(inputLimit);
+}
+
 // ---- 폼 필드 정의 (클라이언트 폼 + 서버 프롬프트 공용) ----------------------
 
 /** 인수인계서 입력 필드 키. */
@@ -130,6 +180,14 @@ const fieldString = z.string().max(FIELD_MAX_LEN);
 export const handoverRequestSchema = z
   .object({
     providerId: z.enum(["anthropic", "openai", "gemini"]),
+    inputLimit: z
+      .number()
+      .int()
+      .min(INPUT_LIMIT_MIN)
+      .max(INPUT_LIMIT_MAX)
+      .refine((n) => n % INPUT_LIMIT_STEP === 0, {
+        message: "입력 상한은 1,000자 단위여야 합니다.",
+      }),
     deptRole: fieldString,
     reason: fieldString,
     targetDate: fieldString,
@@ -145,10 +203,9 @@ export const handoverRequestSchema = z
     (v) => FIELD_KEYS.some((k) => v[k].trim().length > 0),
     { message: "최소 한 개의 항목은 입력해야 합니다." }
   )
-  .refine(
-    (v) => totalLength(v) <= MAX_TOTAL_LEN,
-    { message: `전체 입력은 ${MAX_TOTAL_LEN}자를 넘을 수 없습니다.` }
-  );
+  .refine((v) => isWithinInputLimit(v, v.inputLimit), {
+    message: `전체 입력은 선택한 상한(최대 ${MAX_TOTAL_LEN}자)을 넘을 수 없습니다.`,
+  });
 
 export type HandoverRequest = z.infer<typeof handoverRequestSchema>;
 

@@ -94,7 +94,8 @@ export async function generateHandover(
       prompt: buildPrompt(req),
       schema: handoverResponseSchema,
       schemaName: "HandoverDocument",
-      maxTokens: 8192,
+      // 긴 입력 시 생성 문서가 잘려 JSON 파싱이 실패하는 것을 방지(사전 논의됨).
+      maxTokens: 16384,
     });
 
     return { ok: true, data };

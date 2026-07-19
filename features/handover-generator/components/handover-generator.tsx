@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   Check,
   Copy,
   Download,
@@ -17,6 +18,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useProvider } from "@/components/provider-select";
 
@@ -25,11 +33,14 @@ import { toMarkdown } from "../lib/markdown";
 import { downloadHandoverDocx } from "../lib/docx";
 import { DEMO_INPUT } from "../lib/demo";
 import {
-  ALL_FIELDS,
   BASIC_FIELDS,
   SECTION_FIELDS,
   FIELD_KEYS,
-  MAX_TOTAL_LEN,
+  DEFAULT_INPUT_LIMIT,
+  INPUT_LIMIT_OPTIONS,
+  INPUT_LIMIT_WARN_AT,
+  effectiveInputLimit,
+  normalizeInputLimit,
   totalLength,
   type FieldKey,
   type HandoverResponse,
@@ -38,6 +49,7 @@ import {
 import { ConsentDialog } from "./consent-dialog";
 
 const CONSENT_KEY = "office-ai-toolbox:handover-consent";
+const LIMIT_KEY = "office-ai-toolbox:handover-input-limit";
 
 type FormValues = Record<FieldKey, string>;
 
@@ -112,9 +124,32 @@ export function HandoverGenerator() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [inputLimit, setInputLimit] = useState<number>(DEFAULT_INPUT_LIMIT);
+
+  // 저장된 입력 상한 복원(범위 밖 값이면 기본값). 클라이언트 마운트 시 1회.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(LIMIT_KEY);
+      if (raw !== null) setInputLimit(normalizeInputLimit(raw));
+    } catch {
+      // 저장소 접근 실패는 무시(프라이빗 모드 등)
+    }
+  }, []);
+
+  const handleLimitChange = (value: string | null) => {
+    const next = normalizeInputLimit(value);
+    setInputLimit(next);
+    try {
+      window.localStorage.setItem(LIMIT_KEY, String(next));
+    } catch {
+      // 저장 실패는 무시
+    }
+  };
 
   const charCount = totalLength(form);
-  const overLimit = charCount > MAX_TOTAL_LEN;
+  const effectiveLimit = effectiveInputLimit(inputLimit);
+  const overLimit = charCount > effectiveLimit;
+  const showLimitWarning = inputLimit >= INPUT_LIMIT_WARN_AT;
   const isEmpty = FIELD_KEYS.every((k) => form[k].trim().length === 0);
 
   const currentProvider = providers.find((p) => p.id === providerId) ?? null;
@@ -142,7 +177,7 @@ export function HandoverGenerator() {
     setIsLoading(true);
     setResult(null);
     try {
-      const res = await generateHandover({ providerId, ...form });
+      const res = await generateHandover({ providerId, inputLimit, ...form });
       if (res.ok) {
         setResult(res.data);
       } else {
@@ -198,26 +233,69 @@ export function HandoverGenerator() {
     <div className="mt-6 flex flex-col gap-6">
       {/* 입력 폼 */}
       <div className="flex flex-col gap-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={fillDemo}>
-              <Wand2 />
-              예시 입력 채우기
-            </Button>
-            {!isEmpty && (
-              <Button variant="ghost" size="sm" onClick={clearForm}>
-                비우기
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={fillDemo}>
+                <Wand2 />
+                예시 입력 채우기
               </Button>
-            )}
+              {!isEmpty && (
+                <Button variant="ghost" size="sm" onClick={clearForm}>
+                  비우기
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <label
+                  htmlFor="handover-input-limit"
+                  className="text-xs text-muted-foreground"
+                >
+                  입력 상한
+                </label>
+                <Select
+                  value={String(inputLimit)}
+                  onValueChange={handleLimitChange}
+                >
+                  <SelectTrigger id="handover-input-limit" size="sm" className="w-28">
+                    <SelectValue>
+                      {(v: string | null) =>
+                        v ? `${Number(v).toLocaleString()}자` : ""
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INPUT_LIMIT_OPTIONS.map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n.toLocaleString()}자
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <span
+                className={cn(
+                  "text-xs tabular-nums",
+                  overLimit
+                    ? "text-destructive font-medium"
+                    : "text-muted-foreground"
+                )}
+              >
+                {charCount.toLocaleString()} / {effectiveLimit.toLocaleString()}자
+              </span>
+            </div>
           </div>
-          <span
-            className={cn(
-              "text-xs tabular-nums",
-              overLimit ? "text-destructive font-medium" : "text-muted-foreground"
-            )}
-          >
-            {charCount.toLocaleString()} / {MAX_TOTAL_LEN.toLocaleString()}자
-          </span>
+          {showLimitWarning && (
+            <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
+              <span>
+                입력이 길수록 AI 응답 시간과 비용이 늘어나고, 생성 문서가 길어져
+                잘릴 가능성이 커집니다. 꼭 필요한 내용 위주로 입력하는 것을
+                권장합니다.
+              </span>
+            </p>
+          )}
         </div>
 
         {/* 기본 정보 (짧은 input) */}
@@ -267,7 +345,7 @@ export function HandoverGenerator() {
 
         {overLimit && (
           <p className="text-xs text-destructive">
-            전체 입력은 최대 {MAX_TOTAL_LEN.toLocaleString()}자까지 가능합니다.
+            전체 입력은 선택한 상한({effectiveLimit.toLocaleString()}자)까지 가능합니다.
           </p>
         )}
 
