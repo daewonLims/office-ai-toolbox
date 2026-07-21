@@ -67,9 +67,9 @@ export const tools: Tool[] = [
   {
     slug: "doc-diff",
     name: "문서 버전 비교",
-    description: "두 문서의 변경점을 의미 단위로 비교합니다",
+    description: "두 문서 버전의 변경점을 문단 단위로 비교하고 AI가 요약합니다",
     href: "/tools/doc-diff",
-    status: "coming-soon",
+    status: "active",
     aiDataScope: "full-text",
     icon: GitCompare,
   },

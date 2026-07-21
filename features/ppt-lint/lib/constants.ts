@@ -1,22 +1,12 @@
 /**
- * PPT 린터 공용 상수 — 보안 상한값 및 규칙 임계값.
+ * PPT 린터 공용 상수 — 규칙 임계값.
  * (클라이언트/노드 공용, server-only 아님)
+ *
+ * 업로드/zip 보안 상한은 공유 코어(@/lib/safe-zip)로 승격되었다.
+ * 업로더 UI가 참조하는 두 값만 호환을 위해 재노출한다.
  */
 
-// ---- 업로드 / zip 보안 상한 -------------------------------------------------
-
-/** 업로드 파일 크기 상한 (원본 .pptx 바이트) */
-export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
-export const MAX_UPLOAD_LABEL = "50MB";
-
-/** zip 엔트리 개수 상한 (zip bomb 방어) */
-export const MAX_ENTRIES = 2_000;
-
-/** 엔트리 1개당 압축 해제 크기 상한 */
-export const MAX_ENTRY_BYTES = 50 * 1024 * 1024; // 50MB
-
-/** 전체 압축 해제 누적 크기 상한 */
-export const MAX_TOTAL_BYTES = 200 * 1024 * 1024; // 200MB
+export { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from "@/lib/safe-zip";
 
 // ---- 규칙 임계값 ------------------------------------------------------------
 
