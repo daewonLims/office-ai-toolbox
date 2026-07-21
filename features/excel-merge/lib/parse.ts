@@ -2,6 +2,7 @@
  * 엑셀 워크북 파싱 (클라이언트 측 — server-only 아님).
  * ExcelJS는 항상 동적 import (브라우저 webpack + 순수 Node 모두 동작하는 방어 패턴).
  */
+import type { RichText } from "exceljs";
 import type { CellValue, ParsedSheet } from "./types";
 import { MAX_CELL_LEN, MAX_SAMPLE_ROWS, type FileMeta } from "./mapping-schema";
 
@@ -19,17 +20,20 @@ function fmtDate(d: Date): string {
 }
 
 /** ExcelJS 셀 객체(수식/리치텍스트/하이퍼링크/오류)에서 표시 텍스트/원시값 추출 */
-function objectDisplay(v: any): unknown {
+function objectDisplay(v: unknown): unknown {
   if (v == null) return null;
   if (v instanceof Date) return v;
   if (typeof v !== "object") return v;
-  if (Array.isArray(v.richText)) {
-    return v.richText.map((r: any) => (r && r.text != null ? String(r.text) : "")).join("");
+  const o = v as Record<string, unknown>;
+  if (Array.isArray(o.richText)) {
+    return (o.richText as RichText[])
+      .map((r) => (r?.text != null ? String(r.text) : ""))
+      .join("");
   }
-  if ("result" in v) return v.result; // 수식 { formula, result }
-  if ("text" in v) return v.text; // 하이퍼링크 { text, hyperlink }
-  if ("hyperlink" in v) return v.hyperlink;
-  if ("error" in v) return String(v.error);
+  if ("result" in o) return o.result; // 수식 { formula, result }
+  if ("text" in o) return o.text; // 하이퍼링크 { text, hyperlink }
+  if ("hyperlink" in o) return o.hyperlink;
+  if ("error" in o) return String(o.error);
   return "";
 }
 
@@ -66,9 +70,11 @@ function stringifyCell(value: unknown): string {
 export async function parseWorkbook(fileName: string, data: ArrayBuffer): Promise<ParsedSheet> {
   try {
     const mod = await import("exceljs");
-    const ExcelJS: any = (mod as any).default ?? mod;
+    const ExcelJS = mod.default ?? mod;
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(data as any);
+    await workbook.xlsx.load(
+      data as unknown as Parameters<typeof workbook.xlsx.load>[0]
+    );
 
     const ws = workbook.worksheets[0];
     if (!ws || ws.rowCount === 0) throw emptyErr(fileName);

@@ -4,14 +4,48 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
-  useState,
+  useSyncExternalStore,
 } from "react";
 import type { ProviderId, ProviderInfo } from "@/lib/ai/types";
 import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "office-ai-toolbox:provider";
+
+const subscribeMounted = () => () => {};
+
+function readStoredProvider(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+let currentProvider: string | null | undefined; // undefined = not yet initialized
+
+function getProviderSnapshot(): string | null {
+  if (currentProvider === undefined) currentProvider = readStoredProvider();
+  return currentProvider;
+}
+
+const providerListeners = new Set<() => void>();
+
+function subscribeProvider(cb: () => void): () => void {
+  providerListeners.add(cb);
+  return () => providerListeners.delete(cb);
+}
+
+function writeStoredProvider(id: ProviderId): void {
+  currentProvider = id;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, id);
+  } catch {
+    // Ignore storage failures (e.g. private mode / disabled storage).
+  }
+  providerListeners.forEach((l) => l());
+}
 
 interface ProviderContextValue {
   providers: ProviderInfo[];
@@ -51,34 +85,14 @@ export function ProviderProvider({
   providers: ProviderInfo[];
   children: React.ReactNode;
 }) {
-  // Initialize to null to avoid hydration mismatches; resolve in an effect.
-  const [providerId, setProviderIdState] = useState<ProviderId | null>(null);
-
-  // Restore + resolve the selected provider once on mount (client-only).
-  useEffect(() => {
-    let stored: string | null = null;
-    try {
-      stored = window.localStorage.getItem(STORAGE_KEY);
-    } catch {
-      stored = null;
-    }
-    setProviderIdState(resolveInitialProvider(providers, stored));
-    // Providers come from the server and are stable for the app's lifetime.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Persist to localStorage whenever a (non-null) selection changes.
-  useEffect(() => {
-    if (providerId === null) return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, providerId);
-    } catch {
-      // Ignore storage failures (e.g. private mode / disabled storage).
-    }
-  }, [providerId]);
+  // providerId is null during SSR + hydration (avoids <select> mismatch), then
+  // resolved from localStorage after hydration. Selections persist via the store.
+  const mounted = useSyncExternalStore(subscribeMounted, () => true, () => false);
+  const storedRaw = useSyncExternalStore(subscribeProvider, getProviderSnapshot, () => null);
+  const providerId = mounted ? resolveInitialProvider(providers, storedRaw) : null;
 
   const setProviderId = useCallback((id: ProviderId) => {
-    setProviderIdState(id);
+    writeStoredProvider(id);
   }, []);
 
   const value = useMemo<ProviderContextValue>(

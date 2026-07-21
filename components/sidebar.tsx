@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { tools } from "@/lib/tools";
 import { Badge } from "@/components/ui/badge";
@@ -12,22 +12,22 @@ import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "office-ai-toolbox:sidebar-collapsed";
 
+// mounted flag without an effect: false during SSR + hydration, true after.
+const subscribeMounted = () => () => {};
+
+function readStoredCollapsed(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
 export function Sidebar() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  // Restore collapsed state after mount to avoid SSR hydration mismatch.
-  useEffect(() => {
-    setMounted(true);
-    try {
-      if (window.localStorage.getItem(STORAGE_KEY) === "true") {
-        setCollapsed(true);
-      }
-    } catch {
-      // Ignore storage failures (private mode / disabled storage).
-    }
-  }, []);
+  const [collapsed, setCollapsed] = useState(readStoredCollapsed);
+  const mounted = useSyncExternalStore(subscribeMounted, () => true, () => false);
 
   const toggle = () => {
     setCollapsed((prev) => {

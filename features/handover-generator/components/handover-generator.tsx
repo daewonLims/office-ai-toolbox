@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import {
   AlertTriangle,
   Check,
@@ -50,6 +50,40 @@ import { ConsentDialog } from "./consent-dialog";
 
 const CONSENT_KEY = "office-ai-toolbox:handover-consent";
 const LIMIT_KEY = "office-ai-toolbox:handover-input-limit";
+
+function readStoredLimit(): number {
+  if (typeof window === "undefined") return DEFAULT_INPUT_LIMIT;
+  try {
+    const raw = window.localStorage.getItem(LIMIT_KEY);
+    return raw !== null ? normalizeInputLimit(raw) : DEFAULT_INPUT_LIMIT;
+  } catch {
+    return DEFAULT_INPUT_LIMIT;
+  }
+}
+
+let currentLimit: number | undefined; // undefined = not yet initialized
+
+function getLimitSnapshot(): number {
+  if (currentLimit === undefined) currentLimit = readStoredLimit();
+  return currentLimit;
+}
+
+const limitListeners = new Set<() => void>();
+
+function subscribeLimit(cb: () => void): () => void {
+  limitListeners.add(cb);
+  return () => limitListeners.delete(cb);
+}
+
+function writeStoredLimit(n: number): void {
+  currentLimit = n;
+  try {
+    window.localStorage.setItem(LIMIT_KEY, String(n));
+  } catch {
+    // 저장 실패는 무시(프라이빗 모드 등)
+  }
+  limitListeners.forEach((l) => l());
+}
 
 type FormValues = Record<FieldKey, string>;
 
@@ -124,26 +158,14 @@ export function HandoverGenerator() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [inputLimit, setInputLimit] = useState<number>(DEFAULT_INPUT_LIMIT);
-
-  // 저장된 입력 상한 복원(범위 밖 값이면 기본값). 클라이언트 마운트 시 1회.
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(LIMIT_KEY);
-      if (raw !== null) setInputLimit(normalizeInputLimit(raw));
-    } catch {
-      // 저장소 접근 실패는 무시(프라이빗 모드 등)
-    }
-  }, []);
+  const inputLimit = useSyncExternalStore(
+    subscribeLimit,
+    getLimitSnapshot,
+    () => DEFAULT_INPUT_LIMIT
+  );
 
   const handleLimitChange = (value: string | null) => {
-    const next = normalizeInputLimit(value);
-    setInputLimit(next);
-    try {
-      window.localStorage.setItem(LIMIT_KEY, String(next));
-    } catch {
-      // 저장 실패는 무시
-    }
+    writeStoredLimit(normalizeInputLimit(value));
   };
 
   const charCount = totalLength(form);

@@ -23,12 +23,12 @@ export async function downloadMergedWorkbook(
   if (typeof document === "undefined") return;
 
   const mod = await import("exceljs");
-  const ExcelJS: any = (mod as any).default ?? mod;
+  const ExcelJS = mod.default ?? mod;
   const workbook = new ExcelJS.Workbook();
   const ws = workbook.addWorksheet("취합결과");
 
   const headerRow = ws.addRow(output.headers);
-  headerRow.eachCell((cell: any) => {
+  headerRow.eachCell((cell) => {
     cell.font = { bold: true };
     cell.fill = {
       type: "pattern",
