@@ -20,6 +20,26 @@ import { writeFileSync } from "node:fs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
+// 자체 검증에서 원문 문단과 대조하기 위한 화이트리스트 엔티티 디코더
+// (앱 docx.ts의 decodeXmlEntities와 동일 규칙 — 사전 정의 엔티티 5종 + 숫자 문자 참조).
+function decodeXmlEntities(text) {
+  const NAMED = { amp: "&", lt: "<", gt: ">", apos: "'", quot: '"' };
+  return text.replace(
+    /&(?:amp|lt|gt|apos|quot|#x[0-9a-fA-F]+|#[0-9]+);/g,
+    (m) => {
+      if (m[1] !== "#") return NAMED[m.slice(1, -1)];
+      const hex = m[2] === "x";
+      const cp = Number.parseInt(m.slice(hex ? 3 : 2, -1), hex ? 16 : 10);
+      const ok =
+        cp === 0x09 || cp === 0x0a || cp === 0x0d ||
+        (cp >= 0x20 && cp <= 0xd7ff) ||
+        (cp >= 0xe000 && cp <= 0xfffd) ||
+        (cp >= 0x10000 && cp <= 0x10ffff);
+      return ok ? String.fromCodePoint(cp) : m;
+    }
+  );
+}
+
 // features/doc-diff/lib/demo.ts 에서 그대로 복사 (문자·공백·구두점 동일)
 const BEFORE_PARAS = [
   "2026년 하반기 신제품 'A-라인' 출시 사업계획서",
@@ -83,19 +103,9 @@ async function writeDocx(fileName, paras) {
     ],
   });
 
-  const raw = await Packer.toBuffer(doc);
-
-  // 앱의 추출기(docx.ts)는 보안상 XML 엔티티를 확장하지 않는다(processEntities:false).
-  // 그런데 docx 라이브러리는 아포스트로피를 &apos; 로 과도하게 이스케이프한다.
-  // 아포스트로피는 텍스트 콘텐츠에서 이스케이프가 필요 없으므로 리터럴 ' 로 되돌려,
-  // 앱이 demo.ts 원문("...'A-라인'...")을 그대로 읽게 한다.
-  const zip = await JSZip.loadAsync(raw);
-  const xml = await zip.file("word/document.xml").async("string");
-  zip.file("word/document.xml", xml.replace(/&apos;/g, "'"));
-  const buffer = await zip.generateAsync({
-    type: "nodebuffer",
-    compression: "DEFLATE",
-  });
+  // 앱의 추출기(docx.ts)가 XML 사전 정의 엔티티/숫자 문자 참조를 복원하므로
+  // 여기서 별도의 이스케이프 후처리는 하지 않는다(docx 라이브러리 출력 그대로 기록).
+  const buffer = await Packer.toBuffer(doc);
 
   const out = path.join(here, fileName);
   writeFileSync(out, buffer);
@@ -130,7 +140,8 @@ for (const { out, buffer, paras } of files) {
     process.exit(1);
   }
 
-  const missing = paras.filter((t) => !xml.includes(t));
+  const decoded = decodeXmlEntities(xml);
+  const missing = paras.filter((t) => !decoded.includes(t));
   if (missing.length > 0) {
     console.error(`검증 실패: ${out} — 누락된 문단 ${missing.length}개`, missing);
     process.exit(1);

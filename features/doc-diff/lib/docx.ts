@@ -54,6 +54,50 @@ function toArray(v: unknown): unknown[] {
   return Array.isArray(v) ? v : [v];
 }
 
+/**
+ * 추출된 w:t 텍스트의 XML 엔티티를 복원하는 화이트리스트 디코더(순수 함수).
+ *
+ * 왜 필요한가: 파서를 processEntities:false 로 돌리므로(XXE·엔티티 폭탄 방어)
+ * .docx 원문의 "&" 등이 document.xml에 "&amp;"로 저장된 채 그대로 추출된다.
+ * 여기서 XML 사전 정의 엔티티 5종과 숫자 문자 참조만 사람이 읽는 문자로 되돌린다.
+ *
+ * 왜 안전한가: DOCTYPE/ENTITY 선언은 assertNoDoctype()가 파싱 전에 거부하므로
+ * 커스텀 엔티티 정의가 불가능하다. 이 함수가 되돌리는 것은 고정된 5종 명명 엔티티와
+ * 숫자 문자 참조뿐 — 재귀 확장·폭증이 없어 XXE/엔티티 폭탄과 무관하게 안전하다.
+ * (processEntities:false 방어는 그대로 유지된다. 이 복원은 파서 밖 텍스트 후처리다.)
+ *
+ * 단일 패스: 정규식으로 한 번만 훑어 이중 디코딩을 막는다. 예) "&amp;lt;"는
+ * 앞의 "&amp;"만 "&"로 치환되고 "lt;"는 그대로 남아 최종적으로 리터럴 "&lt;"가 된다.
+ * 숫자 참조는 유효한 XML 문자 범위만 복원하고(서로게이트·0x10FFFF 초과·비허용
+ * 제어문자는 원문 유지) 잘못된 값은 그대로 둔다.
+ */
+export function decodeXmlEntities(text: string): string {
+  const NAMED: Record<string, string> = {
+    amp: "&",
+    lt: "<",
+    gt: ">",
+    apos: "'",
+    quot: '"',
+  };
+  return text.replace(
+    /&(?:amp|lt|gt|apos|quot|#x[0-9a-fA-F]+|#[0-9]+);/g,
+    (m) => {
+      if (m[1] !== "#") return NAMED[m.slice(1, -1)];
+      const hex = m[2] === "x";
+      const cp = Number.parseInt(m.slice(hex ? 3 : 2, -1), hex ? 16 : 10);
+      // 유효한 XML 1.0 문자만 복원(서로게이트·비문자·비허용 제어문자 제외)
+      const ok =
+        cp === 0x09 ||
+        cp === 0x0a ||
+        cp === 0x0d ||
+        (cp >= 0x20 && cp <= 0xd7ff) ||
+        (cp >= 0xe000 && cp <= 0xfffd) ||
+        (cp >= 0x10000 && cp <= 0x10ffff);
+      return ok ? String.fromCodePoint(cp) : m;
+    }
+  );
+}
+
 /** 한 문단(w:p) 하위의 모든 w:t 텍스트를 문서 순서대로 이어붙인다. */
 function collectText(node: unknown): string {
   let out = "";
@@ -67,7 +111,7 @@ function collectText(node: unknown): string {
       const name = localName(k);
       if (name === "t") {
         for (const t of toArray(v)) {
-          if (typeof t === "string") out += t;
+          if (typeof t === "string") out += decodeXmlEntities(t);
           else if (typeof t === "number") out += String(t);
         }
       } else if (name === "tab") {
