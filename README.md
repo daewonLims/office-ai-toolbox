@@ -182,7 +182,7 @@ components/                  # 공유 UI
 ├─ sidebar.tsx               # 접이식 사이드바
 ├─ provider-select.tsx       # AI 프로바이더 선택
 └─ ui/                       # shadcn/ui 컴포넌트
-sample-data/                 # 데모용 가상 데이터(.xlsx/.pptx) + 생성 스크립트
+sample-data/                 # 데모용 가상 데이터(.xlsx/.pptx/.docx) + 생성 스크립트
 ```
 
 새 도구는 `features/<이름>/` 폴더(자급자족 모듈) + `app/tools/<이름>/` 얇은 라우트 + `lib/tools.ts` 메타데이터 한 줄로 추가됩니다.
